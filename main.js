@@ -40,45 +40,58 @@ let nextShootingStar =
   performance.now() + 12000 + Math.random() * 8000;
 
 const PAL = {
-  stemLight: "#86b86a",
-  stem: "#3f7a47",
-  stemDark: "#2a5538",
-  leafLight: "#8dbb68",
-  leaf: "#4d8a4a",
-  leafDark: "#2f6040",
-  leafEdge: "#244a35",
-  rib: "#a9cf80",
-  pedicel: "#6fa05a",
-  shadow: "#22382b"
+  stemLight: "#91bd78",
+  stem: "#47764a",
+  stemDark: "#294b34",
+
+  leafLight: "#7fac65",
+  leaf: "#426f43",
+  leafDark: "#2b5035",
+  leafEdge: "#1d3828",
+  rib: "#689454",
+
+  pedicel: "#70965a",
+  shadow: "#172c24"
 };
 
 const BELL_COLORS = {
-  W: "#fffaf0",
-  Y: "#ffffff",
-  w: "#e2dbec",
-  V: "#b4a9cc"
+  H: "#ffffff",
+  W: "#fff9ed",
+  Y: "#edf2ff",
+  w: "#cbd4e8",
+  V: "#929dbb"
 };
 
 const BELL = [
-  "...WW...",
-  "..WYYW..",
-  ".WYYYYw.",
-  "WYYYYYw.",
-  "WYYYYYw.",
-  ".WYYYw..",
-  "..wVw..."
+  "...H...",
+  "..HWW..",
+  ".HWWYw.",
+  ".WYYYYw",
+  "WYYYYYw",
+  ".WYYYw.",
+  "..wVw.."
+];
+
+const BELL_SMALL = [
+  "..H..",
+  ".HWW.",
+  "HWWYw",
+  "WYYYw",
+  ".wVw."
 ];
 
 const BUD = [
-  "..W..",
-  ".WYW.",
-  "WYYYw",
-  ".WYYw",
+  "..H..",
+  ".HWW.",
+  "HWWYw",
+  ".HYYw",
   "..wV."
 ];
 
 const flowerMap = new Map();
 const bellPixels = [];
+const flowerParts = new Map();
+let currentFlowerPart = "base";
 
 // ==================================================
 // FONDO: CIELO, LUNA, MONTAÑAS Y PRADERA
@@ -433,10 +446,12 @@ function buildBackground() {
 // ==================================================
 
 function put(x, y, color) {
-  flowerMap.set(
-    `${Math.round(x)},${Math.round(y)}`,
-    color
-  );
+  const px = Math.round(x);
+  const py = Math.round(y);
+  const key = `${px},${py}`;
+
+  flowerMap.set(key, color);
+  flowerParts.set(key, currentFlowerPart);
 }
 
 function bezier(p0, p1, p2, p3) {
@@ -514,18 +529,22 @@ function sweep(curve, halfWidth, paint) {
 }
 
 function paintLeaf(s) {
-  if (
-    Math.abs(s.lat) < 0.65 &&
-    s.t > 0.12 &&
-    s.t < 0.9
-  ) {
-    return PAL.rib;
+  const edge = s.d / s.hw;
+
+  // Bordes con contraste tipo voxel
+  if (edge > 0.82) {
+    return s.light > 0.1
+      ? PAL.leafLight
+      : PAL.leafEdge;
   }
 
-  if (s.d / s.hw > 0.82) {
-    return s.light > 0
-      ? PAL.leaf
-      : PAL.leafEdge;
+  // Nervadura central discreta
+  if (
+    Math.abs(s.lat) < 0.55 &&
+    s.t > 0.2 &&
+    s.t < 0.84
+  ) {
+    return PAL.rib;
   }
 
   if (s.light > 0.3) return PAL.leafLight;
@@ -565,12 +584,17 @@ function pointAtX(curve, targetX) {
   return best;
 }
 
-function addBell(cx, cy, len, sprite) {
+function addBell(cx, cy, len, sprite, index = 0) {
+  // Tallito que sostiene la campanilla
   for (let i = 1; i <= len; i++) {
     bellPixels.push({
       x: cx,
       y: cy + i,
-      color: PAL.pedicel
+      color: PAL.pedicel,
+      part: "bell",
+      bellIndex: index,
+      anchorX: cx,
+      anchorY: cy
     });
   }
 
@@ -583,7 +607,11 @@ function addBell(cx, cy, len, sprite) {
         bellPixels.push({
           x: ox + rx,
           y: oy + ry,
-          color: BELL_COLORS[ch]
+          color: BELL_COLORS[ch],
+          part: "bell",
+          bellIndex: index,
+          anchorX: cx,
+          anchorY: cy
         });
       }
     });
@@ -592,33 +620,35 @@ function addBell(cx, cy, len, sprite) {
 
 function buildFlower() {
   flowerMap.clear();
+  flowerParts.clear();
   bellPixels.length = 0;
+  currentFlowerPart = "base";
 
-  // Sombra
-  for (let dy = -3; dy <= 3; dy++) {
-    for (let dx = -15; dx <= 15; dx++) {
+  // Sombra pequeña bajo la planta
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -13; dx <= 13; dx++) {
       if (
-        (dx / 15) ** 2 +
-        (dy / 2.6) ** 2 <= 1
+        (dx / 13) ** 2 +
+        (dy / 2.5) ** 2 <= 1
       ) {
         put(119 + dx, 144 + dy, PAL.shadow);
       }
     }
   }
-
-  // Hoja izquierda
+currentFlowerPart = "leftLeaf";
+  // Hoja izquierda: larga, puntiaguda y abierta
   sweep(
     bezier(
       [117, 142],
-      [105, 135],
-      [91, 113],
-      [96, 94]
+      [103, 135],
+      [92, 112],
+      [101, 91]
     ),
-    leafWidth(7.5),
+    leafWidth(5.0),
     paintLeaf
   );
-
-  // Tallo principal
+currentFlowerPart = "stem";
+  // Tallo principal: conserva su curva original
   const stemCurve = bezier(
     [119, 143],
     [117, 92],
@@ -628,70 +658,77 @@ function buildFlower() {
 
   sweep(
     stemCurve,
-    t => 1.6 - t * 0.5,
+    t => 1.65 - t * 0.45,
     paintStem
   );
-
-  // Hoja derecha
+currentFlowerPart = "rightLeaf";
+  // Hoja derecha: más corta y orientada hacia afuera
   sweep(
     bezier(
       [121, 142],
-      [134, 134],
-      [149, 116],
-      [145, 96]
+      [137, 137],
+      [151, 120],
+      [141, 104]
     ),
-    leafWidth(8),
+    leafWidth(4.5),
     paintLeaf
   );
-
-  // Pasto en la base del lirio
+currentFlowerPart = "base";
+  // Pequeñas briznas en la base
   [
-    [104, 143, 3],
-    [108, 144, 4],
-    [128, 144, 4],
-    [133, 143, 3],
+    [104, 143, 2],
+    [109, 144, 4],
+    [127, 144, 3],
+    [132, 143, 3],
     [137, 144, 2]
   ].forEach(([x, y, h]) => {
     for (let i = 0; i < h; i++) {
       put(
         x + (i > 2 ? 1 : 0),
         y - i,
-        i % 2 ? "#5f9654" : PAL.stem
+        i === h - 1
+          ? PAL.leafLight
+          : PAL.stem
       );
     }
   });
 
-  // Campanillas
+  // Campanillas de distintos tamaños
   [
-    { x: 125, len: 2, sprite: BELL },
+    { x: 125, len: 2, sprite: BELL_SMALL },
     { x: 131, len: 4, sprite: BELL },
     { x: 137, len: 2, sprite: BELL },
-    { x: 143, len: 4, sprite: BELL },
+    { x: 143, len: 4, sprite: BELL_SMALL },
     { x: 148, len: 2, sprite: BUD }
-  ].forEach(b => {
+  ].forEach((b, index) => {
     const p = pointAtX(stemCurve, b.x);
 
     addBell(
       Math.round(p.x),
       Math.round(p.y),
       b.len,
-      b.sprite
+      b.sprite,
+      index
     );
   });
 
-  // Ordenar los píxeles de la flor
+  // Organizar los píxeles para construir la flor
   const base = [...flowerMap].map(([key, color]) => {
-    const [x, y] = key.split(",").map(Number);
+  const [x, y] = key.split(",").map(Number);
 
-    return { x, y, color };
-  });
+  return {
+    x,
+    y,
+    color,
+    part: flowerParts.get(key) || "base"
+  };
+});
 
   base.sort((a, b) => b.y - a.y || a.x - b.x);
 
   pixels.length = 0;
   pixels.push(...base, ...bellPixels);
 
-  // Reiniciar la animación progresiva
   drawnCount = 0;
   fl.clearRect(0, 0, W, H);
 }
@@ -840,8 +877,6 @@ function drawMoonlight(time) {
 
   ctx.restore();
 }
-
-
 // ==================================================
 // NUBES DELGADAS Y LENTAS
 // ==================================================
@@ -1388,32 +1423,31 @@ const fade = fadeIn * fadeOut;
 
 
 function drawFlower(time) {
-  // Brisa lenta y continua
- const wind =
-  Math.sin(time * 0.00035) * 0.9 +
-  Math.sin(time * 0.00018 + 1.2) * 0.35;
+  // Brisa suave y continua
+  const breeze =
+    Math.sin(time * 0.00038) * 0.016 +
+    Math.sin(time * 0.00022 + 1.1) * 0.006;
 
-for (let y = 60; y < 150; y++) {
-  const heightFactor = Math.max(0, (145 - y) / 85);
+  // Punto fijo en la base del lirio
+  const baseX = offsetX + 119 * scale;
+  const baseY = offsetY + 143 * scale;
 
-  // La parte superior se mueve un poquito después
-  const phase = (145 - y) * 0.018;
+  ctx.save();
 
-  const sway =
-    Math.sin(time * 0.00035 - phase) *
-    heightFactor * 0.9 +
-    wind * heightFactor * 0.25;
+  // La base permanece quieta y la parte superior se flexiona
+  ctx.translate(baseX, baseY);
+  ctx.transform(1, 0, breeze, 1, 0, 0);
 
-  const top = offsetY + y * scale;
-  const bottom = offsetY + (y + 1) * scale;
-  const left = offsetX + sway * scale;
-
+  // Dibujar la flor completa, sin separar sus píxeles
   ctx.drawImage(
     flowerLayer,
-    0, y, W, 1,
-    left, top, W * scale, bottom - top
+    -119 * scale,
+    -143 * scale,
+    W * scale,
+    H * scale
   );
-}
+
+  ctx.restore();
 }
 
 
@@ -1472,7 +1506,7 @@ function render(time) {
     W * scale,
     H * scale
   );
-
+ 
   // Animaciones del paisaje
   drawMoonlight(time);
   drawStars(time);
@@ -1496,6 +1530,7 @@ function render(time) {
 
   // Flor siempre por delante del paisaje
   drawFlower(time);
+  
   drawMoonDust(time);
   // Partículas decorativas de la carta
   drawParticles();
